@@ -122,4 +122,4 @@ There is **no Alertmanager yet**, so alerts are not routed to notifications. Add
 - No Alertmanager or notifications.
 - Rootless Podman can only expose what the user is allowed to read; some host metrics may be partial on other systems.
 - Tested only on Fedora 44 with rootless Podman. Docker has not been tested.
-- The dashboard has been validated through queries, but its visual rendering has not been reviewed in a browser for this release.
+- The dashboard was reviewed in a real browser (Firefox 150) in the normal and `firing` states; the `pending` styling has not been captured.

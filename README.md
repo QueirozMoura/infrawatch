@@ -311,7 +311,6 @@ Limitations:
 - Nine Node Exporter collectors report `success=0` on the test machine (`bonding`, `fibrechannel`, `infiniband`, `ipvs`, `nfs`, `nfsd`, `nvme`, `tapestats`, `zfs`). They cover hardware or features absent there and do not affect the metrics shown.
 - On btrfs hosts, subvolumes such as `/` and `/home` share one pool and show the same usage.
 - The dashboard was captured in a real browser (see [Screenshots](#screenshots)), but only the normal and `firing` states; the `pending` styling has not been captured.
-- **Known cosmetic issue:** the "Targets availability" timeline labels segments with threshold text (`1+`, `< 1`) instead of `Up`/`Down`.
 
 ## Troubleshooting
 
@@ -337,11 +336,11 @@ Done:
 3. Grafana provisioning and the System Overview dashboard.
 4. Alert rules, with unit tests and an outage simulation.
 5. Continuous integration (GitHub Actions) and MIT license.
+6. Real dashboard screenshots and the v1.0.0 release.
 
 Ideas for next steps:
 
 - Alertmanager and notifications.
-- Real dashboard screenshots in the documentation.
 - Validation on Docker and other distributions.
 
 ## License
