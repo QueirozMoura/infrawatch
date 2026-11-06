@@ -16,6 +16,7 @@ services:
     volumes:
       # `z` relabels only this single config file (not the host root).
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro,z
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro,z
       - prometheus_data:/prometheus
     cap_drop:
       - ALL
