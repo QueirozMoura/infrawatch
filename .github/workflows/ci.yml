@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# Least privilege: the workflow only reads the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PROMETHEUS_IMAGE: docker.io/prom/prometheus:v3.5.0
+  SHELLCHECK_IMAGE: docker.io/koalaman/shellcheck:v0.11.0
+  # Number of unit-test cases expected in prometheus/tests/alerts_test.yml.
+  # Update it together with the tests.
+  EXPECTED_TEST_CASES: 26
+
+jobs:
+  prometheus:
+    name: Prometheus config, alert rules and unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # actions/checkout v7.0.1, pinned by commit SHA
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Validate Prometheus configuration
+        run: |
+          docker run --rm --entrypoint promtool \
+            -v "$PWD/prometheus:/etc/prometheus:ro" \
+            "$PROMETHEUS_IMAGE" check config /etc/prometheus/prometheus.yml
+
+      - name: Validate the four alert rules
+        run: |
+          docker run --rm --entrypoint promtool \
+            -v "$PWD/prometheus:/etc/prometheus:ro" \
+            "$PROMETHEUS_IMAGE" check rules /etc/prometheus/alerts.yml
+          rules=$(grep -c '^      - alert:' prometheus/alerts.yml)
+          echo "alert rules found: $rules"
+          test "$rules" -eq 4
+
+      - name: Run alert rule unit tests (promtool test rules)
+        run: |
+          cases=$(grep -c '^  - interval:' prometheus/tests/alerts_test.yml)
+          echo "test cases found: $cases (expected $EXPECTED_TEST_CASES)"
+          test "$cases" -eq "$EXPECTED_TEST_CASES"
+          CONTAINER_ENGINE=docker scripts/test-alerts.sh
+
+  scripts:
+    name: Bash scripts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Syntax check (bash -n)
+        run: |
+          for f in scripts/*.sh; do
+            echo "bash -n $f"
+            bash -n "$f"
+          done
+
+      - name: ShellCheck
+        run: |
+          docker run --rm -v "$PWD:/mnt:ro" -w /mnt "$SHELLCHECK_IMAGE" scripts/*.sh
+
+      - name: Scripts are executable
+        run: |
+          for f in scripts/*.sh; do
+            test -x "$f" || { echo "not executable: $f"; exit 1; }
+          done
+
+  compose:
+    name: Compose file and Grafana dashboard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      # .env.example is used only to satisfy the required variable; no .env is created.
+      - name: Validate docker-compose.yml
+        run: docker compose --env-file .env.example config -q
+
+      - name: Validate dashboard JSON
+        run: python3 -m json.tool grafana/dashboards/system-overview.json > /dev/null
+
+  repo-hygiene:
+    name: No secrets or .env files in the repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: .env is ignored and not tracked
+        run: |
+          git check-ignore -q .env || { echo ".env is not listed in .gitignore"; exit 1; }
+          bad=$(git ls-files | grep -E '(^|/)\.env($|\.)' | grep -vE '(^|/)\.env\.example$' || true)
+          if [ -n "$bad" ]; then echo "Tracked env file(s):"; echo "$bad"; exit 1; fi
+
+      - name: Password variable only has the placeholder value
+        run: |
+          bad=$(git grep -nE '^[[:space:]]*GRAFANA_ADMIN_PASSWORD=' -- . \
+                  | grep -vE '^\.env\.example:[0-9]+:GRAFANA_ADMIN_PASSWORD=change-me$' || true)
+          if [ -n "$bad" ]; then echo "Possible committed password:"; echo "$bad"; exit 1; fi
+
+      - name: No private keys or certificates
+        run: |
+          if git grep -nE -e '-----BEGIN [A-Z ]*PRIVATE KEY-----' -- . ; then
+            echo "Private key found"; exit 1
+          fi
+          bad=$(git ls-files | grep -E '\.(pem|key|p12|pfx)$' || true)
+          if [ -n "$bad" ]; then echo "Key/certificate files tracked:"; echo "$bad"; exit 1; fi

@@ -1,5 +1,8 @@
 # InfraWatch
 
+[![CI](https://github.com/QueirozMoura/infrawatch/actions/workflows/ci.yml/badge.svg)](https://github.com/QueirozMoura/infrawatch/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 InfraWatch is an open source monitoring and observability stack for Linux hosts. It collects system metrics with Node Exporter, stores them in Prometheus, evaluates alert rules, and shows everything in a provisioned Grafana dashboard. The whole stack is described by a single `docker-compose.yml` and runs with **rootless Podman** or **Docker**.
 
 > **Status:** working and tested on Fedora 44 with rootless Podman and SELinux in Enforcing mode. Notifications (Alertmanager) are not implemented yet. See [Roadmap](#roadmap).
@@ -15,6 +18,7 @@ InfraWatch is an open source monitoring and observability stack for Linux hosts.
 - [Dashboard](#dashboard)
 - [Alerts](#alerts)
 - [Testing](#testing)
+- [Continuous integration](#continuous-integration)
 - [Simulating an outage](#simulating-an-outage)
 - [Security model](#security-model)
 - [Tested environment and limitations](#tested-environment-and-limitations)
@@ -28,7 +32,7 @@ InfraWatch is an open source monitoring and observability stack for Linux hosts.
 - Prometheus with 15 days of retention in a persistent volume.
 - Grafana with the Prometheus datasource and the **InfraWatch | System Overview** dashboard (13 panels) provisioned from files, with no manual setup.
 - Four alert rules: high CPU, high memory, root disk almost full, and target down.
-- 26 unit tests for the alert rules, using synthetic data only (`promtool test rules`).
+- 26 unit tests for the alert rules, using synthetic data only (`promtool test rules`), run automatically by GitHub Actions.
 - A safe, scripted outage simulation that demonstrates the `TargetDown` alert end to end.
 - Everything listens on `127.0.0.1` only. No `privileged` containers, all capabilities dropped, SELinux left enforcing.
 
@@ -65,6 +69,8 @@ All services share the host network namespace and bind to loopback. A detailed d
 InfraWatch/
 ├── docker-compose.yml                  # Prometheus, Node Exporter, Grafana, demo-service
 ├── .env.example                        # Template for the local, untracked .env
+├── LICENSE                             # MIT
+├── .github/workflows/ci.yml            # Continuous integration
 ├── prometheus/
 │   ├── prometheus.yml                  # Scrape jobs and rule file reference
 │   ├── alerts.yml                      # The four alert rules
@@ -230,11 +236,24 @@ The dashboard's alert panels are built from the `ALERTS` metric, so no rules are
 scripts/test-alerts.sh
 ```
 
-Runs `promtool check rules` and the unit tests in [`prometheus/tests/alerts_test.yml`](prometheus/tests/alerts_test.yml). It uses a local `promtool` if installed, otherwise a short-lived container of the pinned Prometheus image. The tests use only synthetic series inside `promtool`, so they do not touch the running stack or generate any load.
+Runs `promtool check rules` and the unit tests (also run by the [CI](#continuous-integration)) in [`prometheus/tests/alerts_test.yml`](prometheus/tests/alerts_test.yml). It uses a local `promtool` if installed, otherwise a short-lived container of the pinned Prometheus image (podman by default; set `CONTAINER_ENGINE=docker` to force Docker). The tests use only synthetic series inside `promtool`, so they do not touch the running stack or generate any load.
 
 The 26 test cases cover, for each rule: normal values, `pending`, `firing` after the configured `for` time, recovery, spikes shorter than `for`, and values exactly at, just below and just above each threshold (rules use strict `>`, so a value exactly at the threshold does not alert). Additional cases check that only the `/` mountpoint counts for the disk rule and that only the failing job alerts for `TargetDown`.
 
 Result of the last run: all 26 cases passed. During development, deliberately broken copies of the rules (a changed operator, a longer `for`, and different thresholds) made the tests fail, confirming that they detect regressions.
+
+## Continuous integration
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push and pull request, with read-only repository permissions. Tool versions are pinned (Prometheus `v3.5.0` and ShellCheck `v0.11.0` container images; `actions/checkout` pinned by commit SHA).
+
+| Job | Checks |
+| --- | --- |
+| Prometheus | `promtool check config`, `promtool check rules` (exactly 4 rules), and `promtool test rules` (exactly 26 test cases) |
+| Bash scripts | `bash -n`, ShellCheck, executable bit on every script |
+| Compose | `docker compose config` (using `.env.example`, no real `.env`) and dashboard JSON validity |
+| Repository hygiene | `.env` is ignored and not tracked, the password variable only has the `change-me` placeholder, no private keys or certificate files |
+
+If you add or remove alert test cases, update `EXPECTED_TEST_CASES` in the workflow. The CI does not start the stack, so it validates configuration and rules only, not runtime behavior; the outage simulation is a local test.
 
 ## Simulating an outage
 
@@ -315,14 +334,14 @@ Done:
 2. Prometheus and Node Exporter with Podman/Docker Compose.
 3. Grafana provisioning and the System Overview dashboard.
 4. Alert rules, with unit tests and an outage simulation.
+5. Continuous integration (GitHub Actions) and MIT license.
 
 Ideas for next steps:
 
 - Alertmanager and notifications.
 - Real dashboard screenshots in the documentation.
 - Validation on Docker and other distributions.
-- Continuous integration running `scripts/test-alerts.sh`.
 
 ## License
 
-To be defined. No license file has been added yet, so by default all rights are reserved until one is chosen.
+Released under the [MIT License](LICENSE). Copyright (c) 2026 Gustavo Moura.

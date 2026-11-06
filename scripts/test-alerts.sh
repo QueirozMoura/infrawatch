@@ -6,6 +6,7 @@
 # container is short-lived, read-only on the repo, and uses only synthetic data.
 #
 # Usage: scripts/test-alerts.sh
+#        CONTAINER_ENGINE=docker scripts/test-alerts.sh
 set -euo pipefail
 
 IMAGE="docker.io/prom/prometheus:v3.5.0"
@@ -14,7 +15,9 @@ cd "$(dirname "${BASH_SOURCE[0]}")/../prometheus"
 if command -v promtool >/dev/null 2>&1; then
   promtool() { command promtool "$@"; }
 else
-  if command -v podman >/dev/null 2>&1; then ENGINE=podman
+  # CONTAINER_ENGINE (podman|docker) forces an engine; by default podman is preferred.
+  if [ -n "${CONTAINER_ENGINE:-}" ]; then ENGINE="$CONTAINER_ENGINE"
+  elif command -v podman >/dev/null 2>&1; then ENGINE=podman
   elif command -v docker >/dev/null 2>&1; then ENGINE=docker
   else echo "error: need promtool, podman or docker" >&2; exit 1; fi
   promtool() {
