@@ -2,7 +2,7 @@
 
 InfraWatch is an open source monitoring and observability stack for Linux hosts. It collects system metrics, stores them as time series, and presents them in ready-to-use dashboards, all deployable with a single Docker Compose command.
 
-> **Status:** early development. Prometheus and Node Exporter are available; Grafana is planned.
+> **Status:** early development. Prometheus and Node Exporter are working and have been tested on Fedora 44 with rootless Podman; Grafana is planned.
 
 ## Goals
 
@@ -100,13 +100,30 @@ Services are not configured to start automatically on boot.
 - Node Exporter mounts the host root read-only at `/host` with **no SELinux relabeling** (`:z`/`:Z` on `/` would relabel the whole filesystem). SELinux is left enforcing.
 - Only `prometheus.yml` is mounted with `z`, which relabels that single file.
 
+### Tested environment
+
+Prometheus and Node Exporter were run and verified on **Fedora 44 (Workstation) with Podman 5.8.1 rootless**, `podman-compose` 1.6.0 and SELinux in **Enforcing** mode, with no changes to the SELinux policy.
+
+| Check | Result |
+|---|---|
+| `podman compose config` and `promtool check config` | valid |
+| Listening sockets | only `127.0.0.1:9090` and `127.0.0.1:9100` |
+| Prometheus targets `prometheus` and `node-exporter` | **UP** |
+| CPU (`node_cpu_seconds_total`) | validated, host usage and load |
+| RAM (`node_memory_*`) | validated, host total and available |
+| Disk (`node_filesystem_*`, `node_disk_*`) | validated, mountpoints `/`, `/home`, `/boot`, `/boot/efi` and disk I/O |
+| Network (`node_network_*`) | validated, real host interfaces (not container-only) |
+| `node_os_info` | reports the host OS (Fedora Linux 44) |
+| SELinux denials related to the containers | none found |
+
+Nine Node Exporter collectors report `success=0` (`bonding`, `fibrechannel`, `infiniband`, `ipvs`, `nfs`, `nfsd`, `nvme`, `tapestats`, `zfs`). They cover hardware or features absent on the test machine and do not affect the metrics above.
+
 ### Limitations
 
-- **Rootless Podman:** the container only sees what your user can read, so some host files and metrics may be missing.
-- **SELinux (Fedora):** confined containers cannot read most host files under `/host`. CPU, memory and network come from `/proc` and `/sys` and are unaffected. Filesystem and `node_os_info` metrics may be partial. Check denials with `sudo ausearch -m avc -ts recent`. This project does not relax SELinux.
-- **Host networking:** the container shares the host network namespace. Binding to loopback keeps it local, but any local user or process on the machine can reach the endpoints.
-- **Docker (rootful):** works the same way, with more complete filesystem metrics.
-- This configuration has been written but not yet run; verify the targets after the first start.
+- **Rootless Podman:** the container only sees what your user can read, so some host files and metrics may be missing on other machines.
+- **SELinux:** on the tested host, Node Exporter read `/host` without relabeling or policy changes. Other policies or hosts may behave differently; to check for denials, run `sudo ausearch -m avc -ts recent` (or `journalctl _AUDIT_TYPE=1400`). This project does not relax SELinux.
+- **Host networking:** the containers share the host network namespace. Binding to loopback keeps the endpoints local, but any local user or process on the machine can reach them.
+- **Docker:** the same `docker-compose.yml` is intended to work with Docker Compose, but it has not been tested with Docker.
 
 ## Roadmap
 
