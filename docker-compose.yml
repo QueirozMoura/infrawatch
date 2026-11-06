@@ -43,5 +43,29 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  grafana:
+    image: docker.io/grafana/grafana:12.2.0
+    container_name: infrawatch-grafana
+    network_mode: host
+    environment:
+      GF_SERVER_HTTP_ADDR: 127.0.0.1
+      GF_SERVER_HTTP_PORT: "3000"
+      GF_SECURITY_ADMIN_USER: admin
+      # Defined in the untracked .env file (see .env.example); never committed.
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      # `z` relabels only the provisioning directory of this project.
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro,z
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro,z
+      - grafana_data:/var/lib/grafana
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
 volumes:
   prometheus_data:
+  grafana_data:
