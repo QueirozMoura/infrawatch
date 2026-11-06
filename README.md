@@ -125,6 +125,37 @@ Nine Node Exporter collectors report `success=0` (`bonding`, `fibrechannel`, `in
 - **Host networking:** the containers share the host network namespace. Binding to loopback keeps the endpoints local, but any local user or process on the machine can reach them.
 - **Docker:** the same `docker-compose.yml` is intended to work with Docker Compose, but it has not been tested with Docker.
 
+## Alerts
+
+Alert rules live in [`prometheus/alerts.yml`](prometheus/alerts.yml) and are evaluated by Prometheus every 15 seconds (CPU > 90%, RAM > 90%, root disk > 85%, target down). Notifications are not implemented yet.
+
+Check the rules and their state:
+
+- Web UI: <http://127.0.0.1:9090/alerts> (states) and <http://127.0.0.1:9090/rules> (definitions and last evaluation).
+- API:
+
+  ```bash
+  curl -s http://127.0.0.1:9090/api/v1/rules  | python3 -m json.tool   # all rules with state and health
+  curl -s http://127.0.0.1:9090/api/v1/alerts | python3 -m json.tool   # only pending/firing alerts
+  ```
+
+- PromQL: `ALERTS{alertstate=~"pending|firing"}` returns active alerts only.
+
+The **InfraWatch | System Overview** dashboard shows firing and pending counts and a table of active alerts, built from the `ALERTS` metric (no rules are duplicated in Grafana). Rules in the `inactive` state produce no `ALERTS` series, so they do not appear in the dashboard; use the Prometheus UI or API to see them.
+
+### Simulating an outage (TargetDown)
+
+A lightweight `demo-service` (a minimal second Node Exporter on `127.0.0.1:9101`, scraped as job `demo-service`) exists only to exercise the alerts. The helper scripts only ever stop or start that one container; Prometheus, Grafana and Node Exporter are never touched.
+
+```bash
+scripts/demo-service.sh status          # start | stop | restore | status
+scripts/test-target-down.sh             # full automated test, ~90 seconds
+```
+
+The test checks that the target is UP, stops the demo service, follows `TargetDown` through `inactive` -> `pending` -> `firing` (the rule uses `for: 1m`, evaluated every 15s), restores the service and waits for the alert to clear. The service is always restored on exit, even if the test fails or is interrupted. To do it by hand: run `scripts/demo-service.sh stop`, watch <http://127.0.0.1:9090/alerts> and the dashboard's alert panels, then run `scripts/demo-service.sh restore`.
+
+Last run on Fedora 44 (rootless Podman): pending after ~15s, firing after ~76s, recovered ~10s after restore.
+
 ## Roadmap
 
 1. Repository structure and documentation

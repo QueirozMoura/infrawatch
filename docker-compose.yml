@@ -67,6 +67,23 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  # Lightweight demo target used to simulate outages (see scripts/demo-service.sh).
+  # It is a second Node Exporter instance exposing only a couple of trivial
+  # collectors: no host mounts, no extra privileges, loopback only.
+  demo-service:
+    image: docker.io/prom/node-exporter:v1.9.1
+    container_name: infrawatch-demo-service
+    network_mode: host
+    command:
+      - --web.listen-address=127.0.0.1:9101
+      - --collector.disable-defaults
+      - --collector.uname
+      - --collector.time
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
 volumes:
   prometheus_data:
   grafana_data:
