@@ -1,0 +1,47 @@
+name: infrawatch
+
+# Both services use the host network namespace and listen ONLY on 127.0.0.1,
+# so nothing is reachable from outside this machine. No `ports:` are published.
+
+services:
+  prometheus:
+    image: docker.io/prom/prometheus:v3.5.0
+    container_name: infrawatch-prometheus
+    network_mode: host
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.listen-address=127.0.0.1:9090
+    volumes:
+      # `z` relabels only this single config file (not the host root).
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro,z
+      - prometheus_data:/prometheus
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      - node-exporter
+
+  node-exporter:
+    image: docker.io/prom/node-exporter:v1.9.1
+    container_name: infrawatch-node-exporter
+    network_mode: host
+    # Host PID namespace so process/CPU metrics reflect the host.
+    pid: host
+    command:
+      - --web.listen-address=127.0.0.1:9100
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run/credentials/.+|var/lib/(docker|containers)/.+)($$|/)
+    volumes:
+      # Read-only host root. Deliberately NO `z`/`Z`: relabeling `/` would
+      # change SELinux labels across the whole host filesystem.
+      - /:/host:ro,rslave
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  prometheus_data:

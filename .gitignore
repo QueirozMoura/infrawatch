@@ -1,0 +1,30 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Persistent data (volumes, databases)
+data/
+volumes/
+prometheus/data/
+grafana/data/
+*.db
+*.sqlite
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+*~
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.code-workspace
+
+# Docker Compose overrides (local only)
+docker-compose.override.yml
