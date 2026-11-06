@@ -194,14 +194,15 @@ Because the dashboard is provisioned with `allowUiUpdates: false`, changes made 
 
 ### Screenshots
 
-Screenshots of the real dashboard have not been added yet. See [docs/screenshots/README.md](docs/screenshots/README.md) for what to capture and how to add them.
+Real captures of the dashboard (Firefox 150, 1700x1350, last 15 minutes, taken on the tested Fedora 44 host).
 
-<!--
-After adding the images to docs/screenshots/, replace this comment with:
+**Normal state:** all 13 panels, no active alerts.
 
-![System Overview dashboard](docs/screenshots/system-overview.png)
-![Alerts panel while TargetDown is firing](docs/screenshots/alerts-firing.png)
--->
+![InfraWatch System Overview dashboard in the normal state, with no active alerts](docs/screenshots/system-overview.png)
+
+**`TargetDown` firing:** `demo-service` was stopped with `scripts/demo-service.sh stop`; the alert row shows one firing alert, "Targets up" drops to 67%, and the availability timeline shows the outage.
+
+![InfraWatch dashboard while the TargetDown alert is firing for the demo service](docs/screenshots/alerts-firing.png)
 
 ## Alerts
 
@@ -309,7 +310,8 @@ Limitations:
 - **Host networking:** the containers share the host network namespace. Loopback binding keeps the endpoints local, but any local user or process on the machine can reach them.
 - Nine Node Exporter collectors report `success=0` on the test machine (`bonding`, `fibrechannel`, `infiniband`, `ipvs`, `nfs`, `nfsd`, `nvme`, `tapestats`, `zfs`). They cover hardware or features absent there and do not affect the metrics shown.
 - On btrfs hosts, subvolumes such as `/` and `/home` share one pool and show the same usage.
-- Dashboard colors, layout and the alert panel's `pending`/`firing` styling were checked through the API only; they have not been reviewed visually in a browser for this release.
+- The dashboard was captured in a real browser (see [Screenshots](#screenshots)), but only the normal and `firing` states; the `pending` styling has not been captured.
+- **Known cosmetic issue:** the "Targets availability" timeline labels segments with threshold text (`1+`, `< 1`) instead of `Up`/`Down`.
 
 ## Troubleshooting
 
