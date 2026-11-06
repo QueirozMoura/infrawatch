@@ -12,9 +12,9 @@
   "graphTooltip": 1,
   "refresh": "15s",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "time": {
-    "from": "now-1h",
+    "from": "now-15m",
     "to": "now"
   },
   "timepicker": {
@@ -72,7 +72,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "blue",
                 "value": null
               },
               {
@@ -99,7 +99,7 @@
           "fields": "",
           "values": false
         },
-        "colorMode": "background",
+        "colorMode": "value",
         "graphMode": "area",
         "textMode": "auto",
         "justifyMode": "center"
@@ -144,7 +144,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "blue",
                 "value": null
               },
               {
@@ -171,7 +171,7 @@
           "fields": "",
           "values": false
         },
-        "colorMode": "background",
+        "colorMode": "value",
         "graphMode": "area",
         "textMode": "auto",
         "justifyMode": "center"
@@ -216,7 +216,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "blue",
                 "value": null
               },
               {
@@ -243,7 +243,7 @@
           "fields": "",
           "values": false
         },
-        "colorMode": "background",
+        "colorMode": "value",
         "graphMode": "area",
         "textMode": "auto",
         "justifyMode": "center"
@@ -311,7 +311,7 @@
           "fields": "",
           "values": false
         },
-        "colorMode": "background",
+        "colorMode": "value",
         "graphMode": "area",
         "textMode": "auto",
         "justifyMode": "center"
@@ -381,9 +381,9 @@
           },
           "custom": {
             "drawStyle": "line",
-            "lineWidth": 2,
-            "fillOpacity": 15,
-            "gradientMode": "opacity",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "gradientMode": "none",
             "showPoints": "never",
             "spanNulls": true,
             "lineInterpolation": "smooth",
@@ -411,8 +411,132 @@
                 }
               },
               {
+                "id": "custom.lineWidth",
+                "value": 3
+              },
+              {
                 "id": "custom.fillOpacity",
-                "value": 25
+                "value": 20
+              },
+              {
+                "id": "custom.gradientMode",
+                "value": "opacity"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "user"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "light-blue"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    6,
+                    6
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "system"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "light-orange"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    6,
+                    6
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "iowait"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "light-yellow"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    6,
+                    6
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "steal"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "light-red"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    6,
+                    6
+                  ]
+                }
               }
             ]
           }
@@ -420,13 +544,11 @@
       },
       "options": {
         "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
           "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
           "calcs": [
-            "lastNotNull",
-            "mean",
-            "max"
+            "lastNotNull"
           ]
         },
         "tooltip": {
@@ -499,9 +621,9 @@
           },
           "custom": {
             "drawStyle": "line",
-            "lineWidth": 2,
-            "fillOpacity": 15,
-            "gradientMode": "opacity",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "gradientMode": "none",
             "showPoints": "never",
             "spanNulls": true,
             "lineInterpolation": "smooth",
@@ -527,6 +649,43 @@
                   "mode": "fixed",
                   "fixedColor": "purple"
                 }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 3
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 20
+              },
+              {
+                "id": "custom.gradientMode",
+                "value": "opacity"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Cache + buffers"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "light-purple"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    6,
+                    6
+                  ]
+                }
               }
             ]
           }
@@ -534,13 +693,11 @@
       },
       "options": {
         "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
           "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
           "calcs": [
-            "lastNotNull",
-            "mean",
-            "max"
+            "lastNotNull"
           ]
         },
         "tooltip": {
@@ -729,13 +886,11 @@
       },
       "options": {
         "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
           "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
           "calcs": [
-            "lastNotNull",
-            "mean",
-            "max"
+            "lastNotNull"
           ]
         },
         "tooltip": {
@@ -875,13 +1030,11 @@
       },
       "options": {
         "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
           "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
           "calcs": [
-            "lastNotNull",
-            "mean",
-            "max"
+            "lastNotNull"
           ]
         },
         "tooltip": {
