@@ -143,6 +143,14 @@ Check the rules and their state:
 
 The **InfraWatch | System Overview** dashboard shows firing and pending counts and a table of active alerts, built from the `ALERTS` metric (no rules are duplicated in Grafana). Rules in the `inactive` state produce no `ALERTS` series, so they do not appear in the dashboard; use the Prometheus UI or API to see them.
 
+### Testing the alert rules
+
+```bash
+scripts/test-alerts.sh
+```
+
+Runs `promtool check rules` and the unit tests in [`prometheus/tests/alerts_test.yml`](prometheus/tests/alerts_test.yml) against `prometheus/alerts.yml`. The tests use only synthetic series inside `promtool` (using a local `promtool` if installed, otherwise a short-lived container), so they do not touch the running stack or generate any load. They cover, for each of the four rules: normal values, `pending`, `firing` after the configured `for` time, recovery, spikes shorter than `for`, and values exactly at, just below and just above each threshold.
+
 ### Simulating an outage (TargetDown)
 
 A lightweight `demo-service` (a minimal second Node Exporter on `127.0.0.1:9101`, scraped as job `demo-service`) exists only to exercise the alerts. The helper scripts only ever stop or start that one container; Prometheus, Grafana and Node Exporter are never touched.

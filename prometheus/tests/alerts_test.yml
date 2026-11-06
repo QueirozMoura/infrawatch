@@ -1,0 +1,787 @@
+# Unit tests for prometheus/alerts.yml (promtool test rules).
+# All series below are synthetic and exist only inside these tests.
+# Run with: scripts/test-alerts.sh
+#
+# Notes
+# - promtool only lists FIRING alerts in `alert_rule_test`; to assert the
+#   `pending` state we query the synthetic ALERTS series with promql_expr_test.
+# - Group evaluation interval is 1m, so `for: 5m` fires 5 evaluations after the
+#   first true evaluation and `for: 1m` fires on the next evaluation.
+rule_files:
+  - ../alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+
+  # HighCpuUsage: normal load (20% usage) never alerts
+  - interval: 1m
+    input_series:
+      - series: 'node_cpu_seconds_total{cpu="0", mode="idle", instance="localhost:9100", job="node-exporter"}'
+        values: '0+48x30'
+      - series: 'node_cpu_seconds_total{cpu="1", mode="idle", instance="localhost:9100", job="node-exporter"}'
+        values: '0+48x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HighCpuUsage
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: HighCpuUsage
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="HighCpuUsage"}
+        eval_time: 10m
+        exp_samples: []
+      - expr: ALERTS{alertname="HighCpuUsage"}
+        eval_time: 20m
+        exp_samples: []
+
+  # HighCpuUsage: sustained 95% usage -> pending, then firing after 5m
+  - interval: 1m
+    input_series:
+      - series: 'node_cpu_seconds_total{cpu="0", mode="idle", instance="localhost:9100", job="node-exporter"}'
+        values: '0+3x30'
+      - series: 'node_cpu_seconds_total{cpu="1", mode="idle", instance="localhost:9100", job="node-exporter"}'
+        values: '0+3x30'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HighCpuUsage
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: HighCpuUsage
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: HighCpuUsage
+        exp_alerts:
+          - exp_labels:
+              instance: localhost:9100
+              severity: warning
+            exp_annotations:
+              summary: "High CPU usage on localhost:9100"
+              description: "CPU usage has been above 90% for more than 5 minutes (current value: 95.0%)."
+    promql_expr_test:
+      - expr: ALERTS{alertname="HighCpuUsage"}
+        eval_time: 1m
+        exp_samples:
+          - labels: 'ALERTS{alertname="HighCpuUsage", alertstate="pending", instance="localhost:9100", severity="warning"}'
+            value: 1
+      - expr: ALERTS{alertname="HighCpuUsage"}
+        eval_time: 5m
+        exp_samples:
+          - labels: 'ALERTS{alertname="HighCpuUsage", alertstate="pending", instance="localhost:9100", severity="warning"}'
+            value: 1
+      - expr: ALERTS{alertname="HighCpuUsage"}
+        eval_time: 6m
+        exp_samples:
+          - labels: 'ALERTS{alertname="HighCpuUsage", alertstate="firing", instance="localhost:9100", severity="warning"}'
+            value: 1
+
+  # HighCpuUsage: recovery - firing at 95%, clears once usage returns to normal
+  - interval: 1m
+    input_series:
+      - series: 'node_cpu_seconds_total{cpu="0", mode="idle", instance="localhost:9100", job="node-exporter"}'
+        values: '0+3x10 33+48x30'
+      - series: 'node_cpu_seconds_total{cpu="1", mode="idle", instance="localhost:9100", job="node-exporter"}'
+        values: '0+3x10 33+48x30'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: HighCpuUsage
+        exp_alerts:
+          - exp_labels:
+              instance: localhost:9100
+              severity: warning
+            exp_annotations:
+              summary: "High CPU usage on localhost:9100"
+              description: "CPU usage has been above 90% for more than 5 minutes (current value: 95.0%)."
+      - eval_time: 10m
+        alertname: HighCpuUsage
+        exp_alerts:
+          - exp_labels:
+              instance: localhost:9100
+              severity: warning
+            exp_annotations:
+              summary: "High CPU usage on localhost:9100"
+              description: "CPU usage has been above 90% for more than 5 minutes (current value: 95.0%)."
+      - eval_time: 25m
+        alertname: HighCpuUsage
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="HighCpuUsage"}
+        eval_time: 6m
+        exp_samples:
+          - labels: 'ALERTS{alertname="HighCpuUsage", alertstate="firing", instance="localhost:9100", severity="warning"}'
+            value: 1
+      - expr: ALERTS{alertname="HighCpuUsage"}
+        eval_time: 10m
+        exp_samples:
+          - labels: 'ALERTS{alertname="HighCpuUsage", alertstate="firing", instance="localhost:9100", severity="warning"}'
+            value: 1
+      - expr: ALERTS{alertname="HighCpuUsage"}
+        eval_time: 25m
+        exp_samples: []
+
+  # HighCpuUsage: 3-minute spike shorter than `for` never fires
+  - interval: 1m
+    input_series:
+      - series: 'node_cpu_seconds_total{cpu="0", mode="idle", instance="localhost:9100", job="node-exporter"}'
+        values: '0+3x3 9+48x30'
+      - series: 'node_cpu_seconds_total{cpu="1", mode="idle", instance="localhost:9100", job="node-exporter"}'
+        values: '0+3x3 9+48x30'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: HighCpuUsage
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: HighCpuUsage
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: HighCpuUsage
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: HighCpuUsage
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="HighCpuUsage"}
+        eval_time: 3m
+        exp_samples:
+          - labels: 'ALERTS{alertname="HighCpuUsage", alertstate="pending", instance="localhost:9100", severity="warning"}'
+            value: 1
+      - expr: ALERTS{alertname="HighCpuUsage"}
+        eval_time: 6m
+        exp_samples: []
+      - expr: ALERTS{alertname="HighCpuUsage"}
+        eval_time: 7m
+        exp_samples: []
+      - expr: ALERTS{alertname="HighCpuUsage"}
+        eval_time: 20m
+        exp_samples: []
+
+  # HighCpuUsage: boundary - exactly 90% usage does not alert (rule is strictly > 90)
+  - interval: 1m
+    input_series:
+      - series: 'node_cpu_seconds_total{cpu="0", mode="idle", instance="localhost:9100", job="node-exporter"}'
+        values: '0+6x30'
+      - series: 'node_cpu_seconds_total{cpu="1", mode="idle", instance="localhost:9100", job="node-exporter"}'
+        values: '0+6x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HighCpuUsage
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="HighCpuUsage"}
+        eval_time: 10m
+        exp_samples: []
+
+  # HighCpuUsage: boundary - 89.9% usage does not alert
+  - interval: 1m
+    input_series:
+      - series: 'node_cpu_seconds_total{cpu="0", mode="idle", instance="localhost:9100", job="node-exporter"}'
+        values: '0+6.06x30'
+      - series: 'node_cpu_seconds_total{cpu="1", mode="idle", instance="localhost:9100", job="node-exporter"}'
+        values: '0+6.06x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HighCpuUsage
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="HighCpuUsage"}
+        eval_time: 10m
+        exp_samples: []
+
+  # HighCpuUsage: boundary - 90.1% usage alerts
+  - interval: 1m
+    input_series:
+      - series: 'node_cpu_seconds_total{cpu="0", mode="idle", instance="localhost:9100", job="node-exporter"}'
+        values: '0+5.94x30'
+      - series: 'node_cpu_seconds_total{cpu="1", mode="idle", instance="localhost:9100", job="node-exporter"}'
+        values: '0+5.94x30'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HighCpuUsage
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: HighCpuUsage
+        exp_alerts:
+          - exp_labels:
+              instance: localhost:9100
+              severity: warning
+            exp_annotations:
+              summary: "High CPU usage on localhost:9100"
+              description: "CPU usage has been above 90% for more than 5 minutes (current value: 90.1%)."
+    promql_expr_test:
+      - expr: ALERTS{alertname="HighCpuUsage"}
+        eval_time: 5m
+        exp_samples:
+          - labels: 'ALERTS{alertname="HighCpuUsage", alertstate="pending", instance="localhost:9100", severity="warning"}'
+            value: 1
+      - expr: ALERTS{alertname="HighCpuUsage"}
+        eval_time: 7m
+        exp_samples:
+          - labels: 'ALERTS{alertname="HighCpuUsage", alertstate="firing", instance="localhost:9100", severity="warning"}'
+            value: 1
+
+  # HighMemoryUsage: normal usage (50%) never alerts
+  - interval: 1m
+    input_series:
+      - series: 'node_memory_MemTotal_bytes{instance="localhost:9100", job="node-exporter"}'
+        values: '10000x40'
+      - series: 'node_memory_MemAvailable_bytes{instance="localhost:9100", job="node-exporter"}'
+        values: '5000x40'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HighMemoryUsage
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: HighMemoryUsage
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="HighMemoryUsage"}
+        eval_time: 10m
+        exp_samples: []
+      - expr: ALERTS{alertname="HighMemoryUsage"}
+        eval_time: 30m
+        exp_samples: []
+
+  # HighMemoryUsage: sustained 95% usage -> pending, then firing after 5m
+  - interval: 1m
+    input_series:
+      - series: 'node_memory_MemTotal_bytes{instance="localhost:9100", job="node-exporter"}'
+        values: '10000x40'
+      - series: 'node_memory_MemAvailable_bytes{instance="localhost:9100", job="node-exporter"}'
+        values: '500x40'
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: HighMemoryUsage
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: HighMemoryUsage
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: HighMemoryUsage
+        exp_alerts:
+          - exp_labels:
+              instance: localhost:9100
+              job: node-exporter
+              severity: warning
+            exp_annotations:
+              summary: "High memory usage on localhost:9100"
+              description: "Memory usage has been above 90% for more than 5 minutes (current value: 95.0%)."
+    promql_expr_test:
+      - expr: ALERTS{alertname="HighMemoryUsage"}
+        eval_time: 0m
+        exp_samples:
+          - labels: 'ALERTS{alertname="HighMemoryUsage", alertstate="pending", instance="localhost:9100", job="node-exporter", severity="warning"}'
+            value: 1
+      - expr: ALERTS{alertname="HighMemoryUsage"}
+        eval_time: 4m
+        exp_samples:
+          - labels: 'ALERTS{alertname="HighMemoryUsage", alertstate="pending", instance="localhost:9100", job="node-exporter", severity="warning"}'
+            value: 1
+      - expr: ALERTS{alertname="HighMemoryUsage"}
+        eval_time: 5m
+        exp_samples:
+          - labels: 'ALERTS{alertname="HighMemoryUsage", alertstate="firing", instance="localhost:9100", job="node-exporter", severity="warning"}'
+            value: 1
+
+  # HighMemoryUsage: recovery - clears as soon as usage drops
+  - interval: 1m
+    input_series:
+      - series: 'node_memory_MemTotal_bytes{instance="localhost:9100", job="node-exporter"}'
+        values: '10000x40'
+      - series: 'node_memory_MemAvailable_bytes{instance="localhost:9100", job="node-exporter"}'
+        values: '500x6 5000x30'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: HighMemoryUsage
+        exp_alerts:
+          - exp_labels:
+              instance: localhost:9100
+              job: node-exporter
+              severity: warning
+            exp_annotations:
+              summary: "High memory usage on localhost:9100"
+              description: "Memory usage has been above 90% for more than 5 minutes (current value: 95.0%)."
+      - eval_time: 7m
+        alertname: HighMemoryUsage
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: HighMemoryUsage
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="HighMemoryUsage"}
+        eval_time: 6m
+        exp_samples:
+          - labels: 'ALERTS{alertname="HighMemoryUsage", alertstate="firing", instance="localhost:9100", job="node-exporter", severity="warning"}'
+            value: 1
+      - expr: ALERTS{alertname="HighMemoryUsage"}
+        eval_time: 7m
+        exp_samples: []
+      - expr: ALERTS{alertname="HighMemoryUsage"}
+        eval_time: 20m
+        exp_samples: []
+
+  # HighMemoryUsage: 3-minute spike shorter than `for` never fires
+  - interval: 1m
+    input_series:
+      - series: 'node_memory_MemTotal_bytes{instance="localhost:9100", job="node-exporter"}'
+        values: '10000x40'
+      - series: 'node_memory_MemAvailable_bytes{instance="localhost:9100", job="node-exporter"}'
+        values: '500x3 5000x30'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: HighMemoryUsage
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: HighMemoryUsage
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: HighMemoryUsage
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="HighMemoryUsage"}
+        eval_time: 3m
+        exp_samples:
+          - labels: 'ALERTS{alertname="HighMemoryUsage", alertstate="pending", instance="localhost:9100", job="node-exporter", severity="warning"}'
+            value: 1
+      - expr: ALERTS{alertname="HighMemoryUsage"}
+        eval_time: 4m
+        exp_samples: []
+      - expr: ALERTS{alertname="HighMemoryUsage"}
+        eval_time: 6m
+        exp_samples: []
+
+  # HighMemoryUsage: boundary - exactly 90% usage does not alert (rule is strictly > 90)
+  - interval: 1m
+    input_series:
+      - series: 'node_memory_MemTotal_bytes{instance="localhost:9100", job="node-exporter"}'
+        values: '10000x40'
+      - series: 'node_memory_MemAvailable_bytes{instance="localhost:9100", job="node-exporter"}'
+        values: '1000x40'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HighMemoryUsage
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="HighMemoryUsage"}
+        eval_time: 10m
+        exp_samples: []
+
+  # HighMemoryUsage: boundary - 89.99% usage does not alert
+  - interval: 1m
+    input_series:
+      - series: 'node_memory_MemTotal_bytes{instance="localhost:9100", job="node-exporter"}'
+        values: '10000x40'
+      - series: 'node_memory_MemAvailable_bytes{instance="localhost:9100", job="node-exporter"}'
+        values: '1001x40'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HighMemoryUsage
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="HighMemoryUsage"}
+        eval_time: 10m
+        exp_samples: []
+
+  # HighMemoryUsage: boundary - 90.01% usage alerts
+  - interval: 1m
+    input_series:
+      - series: 'node_memory_MemTotal_bytes{instance="localhost:9100", job="node-exporter"}'
+        values: '10000x40'
+      - series: 'node_memory_MemAvailable_bytes{instance="localhost:9100", job="node-exporter"}'
+        values: '999x40'
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: HighMemoryUsage
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: HighMemoryUsage
+        exp_alerts:
+          - exp_labels:
+              instance: localhost:9100
+              job: node-exporter
+              severity: warning
+            exp_annotations:
+              summary: "High memory usage on localhost:9100"
+              description: "Memory usage has been above 90% for more than 5 minutes (current value: 90.0%)."
+    promql_expr_test:
+      - expr: ALERTS{alertname="HighMemoryUsage"}
+        eval_time: 0m
+        exp_samples:
+          - labels: 'ALERTS{alertname="HighMemoryUsage", alertstate="pending", instance="localhost:9100", job="node-exporter", severity="warning"}'
+            value: 1
+      - expr: ALERTS{alertname="HighMemoryUsage"}
+        eval_time: 5m
+        exp_samples:
+          - labels: 'ALERTS{alertname="HighMemoryUsage", alertstate="firing", instance="localhost:9100", job="node-exporter", severity="warning"}'
+            value: 1
+
+  # RootDiskUsageHigh: normal usage (20%) never alerts
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_size_bytes{device="/dev/sda3", fstype="btrfs", instance="localhost:9100", job="node-exporter", mountpoint="/"}'
+        values: '100x40'
+      - series: 'node_filesystem_avail_bytes{device="/dev/sda3", fstype="btrfs", instance="localhost:9100", job="node-exporter", mountpoint="/"}'
+        values: '80x40'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: RootDiskUsageHigh
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: RootDiskUsageHigh
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="RootDiskUsageHigh"}
+        eval_time: 10m
+        exp_samples: []
+      - expr: ALERTS{alertname="RootDiskUsageHigh"}
+        eval_time: 30m
+        exp_samples: []
+
+  # RootDiskUsageHigh: sustained 90% usage -> pending, then firing after 5m
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_size_bytes{device="/dev/sda3", fstype="btrfs", instance="localhost:9100", job="node-exporter", mountpoint="/"}'
+        values: '100x40'
+      - series: 'node_filesystem_avail_bytes{device="/dev/sda3", fstype="btrfs", instance="localhost:9100", job="node-exporter", mountpoint="/"}'
+        values: '10x40'
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: RootDiskUsageHigh
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: RootDiskUsageHigh
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: RootDiskUsageHigh
+        exp_alerts:
+          - exp_labels:
+              device: /dev/sda3
+              fstype: btrfs
+              instance: localhost:9100
+              job: node-exporter
+              mountpoint: /
+              severity: critical
+            exp_annotations:
+              summary: "Root filesystem almost full on localhost:9100"
+              description: "Disk usage of / has been above 85% for more than 5 minutes (current value: 90.0%)."
+    promql_expr_test:
+      - expr: ALERTS{alertname="RootDiskUsageHigh"}
+        eval_time: 0m
+        exp_samples:
+          - labels: 'ALERTS{alertname="RootDiskUsageHigh", alertstate="pending", device="/dev/sda3", fstype="btrfs", instance="localhost:9100", job="node-exporter", mountpoint="/", severity="critical"}'
+            value: 1
+      - expr: ALERTS{alertname="RootDiskUsageHigh"}
+        eval_time: 4m
+        exp_samples:
+          - labels: 'ALERTS{alertname="RootDiskUsageHigh", alertstate="pending", device="/dev/sda3", fstype="btrfs", instance="localhost:9100", job="node-exporter", mountpoint="/", severity="critical"}'
+            value: 1
+      - expr: ALERTS{alertname="RootDiskUsageHigh"}
+        eval_time: 5m
+        exp_samples:
+          - labels: 'ALERTS{alertname="RootDiskUsageHigh", alertstate="firing", device="/dev/sda3", fstype="btrfs", instance="localhost:9100", job="node-exporter", mountpoint="/", severity="critical"}'
+            value: 1
+
+  # RootDiskUsageHigh: recovery - clears when space is freed
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_size_bytes{device="/dev/sda3", fstype="btrfs", instance="localhost:9100", job="node-exporter", mountpoint="/"}'
+        values: '100x40'
+      - series: 'node_filesystem_avail_bytes{device="/dev/sda3", fstype="btrfs", instance="localhost:9100", job="node-exporter", mountpoint="/"}'
+        values: '10x6 80x30'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: RootDiskUsageHigh
+        exp_alerts:
+          - exp_labels:
+              device: /dev/sda3
+              fstype: btrfs
+              instance: localhost:9100
+              job: node-exporter
+              mountpoint: /
+              severity: critical
+            exp_annotations:
+              summary: "Root filesystem almost full on localhost:9100"
+              description: "Disk usage of / has been above 85% for more than 5 minutes (current value: 90.0%)."
+      - eval_time: 7m
+        alertname: RootDiskUsageHigh
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: RootDiskUsageHigh
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="RootDiskUsageHigh"}
+        eval_time: 6m
+        exp_samples:
+          - labels: 'ALERTS{alertname="RootDiskUsageHigh", alertstate="firing", device="/dev/sda3", fstype="btrfs", instance="localhost:9100", job="node-exporter", mountpoint="/", severity="critical"}'
+            value: 1
+      - expr: ALERTS{alertname="RootDiskUsageHigh"}
+        eval_time: 7m
+        exp_samples: []
+      - expr: ALERTS{alertname="RootDiskUsageHigh"}
+        eval_time: 20m
+        exp_samples: []
+
+  # RootDiskUsageHigh: 3-minute spike shorter than `for` never fires
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_size_bytes{device="/dev/sda3", fstype="btrfs", instance="localhost:9100", job="node-exporter", mountpoint="/"}'
+        values: '100x40'
+      - series: 'node_filesystem_avail_bytes{device="/dev/sda3", fstype="btrfs", instance="localhost:9100", job="node-exporter", mountpoint="/"}'
+        values: '10x3 80x30'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: RootDiskUsageHigh
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: RootDiskUsageHigh
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: RootDiskUsageHigh
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="RootDiskUsageHigh"}
+        eval_time: 3m
+        exp_samples:
+          - labels: 'ALERTS{alertname="RootDiskUsageHigh", alertstate="pending", device="/dev/sda3", fstype="btrfs", instance="localhost:9100", job="node-exporter", mountpoint="/", severity="critical"}'
+            value: 1
+      - expr: ALERTS{alertname="RootDiskUsageHigh"}
+        eval_time: 4m
+        exp_samples: []
+      - expr: ALERTS{alertname="RootDiskUsageHigh"}
+        eval_time: 6m
+        exp_samples: []
+
+  # RootDiskUsageHigh: boundary - exactly 85% usage does not alert (rule is strictly > 85)
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_size_bytes{device="/dev/sda3", fstype="btrfs", instance="localhost:9100", job="node-exporter", mountpoint="/"}'
+        values: '100x40'
+      - series: 'node_filesystem_avail_bytes{device="/dev/sda3", fstype="btrfs", instance="localhost:9100", job="node-exporter", mountpoint="/"}'
+        values: '15x40'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: RootDiskUsageHigh
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="RootDiskUsageHigh"}
+        eval_time: 10m
+        exp_samples: []
+
+  # RootDiskUsageHigh: boundary - 84% usage does not alert
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_size_bytes{device="/dev/sda3", fstype="btrfs", instance="localhost:9100", job="node-exporter", mountpoint="/"}'
+        values: '100x40'
+      - series: 'node_filesystem_avail_bytes{device="/dev/sda3", fstype="btrfs", instance="localhost:9100", job="node-exporter", mountpoint="/"}'
+        values: '16x40'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: RootDiskUsageHigh
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="RootDiskUsageHigh"}
+        eval_time: 10m
+        exp_samples: []
+
+  # RootDiskUsageHigh: boundary - 86% usage alerts
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_size_bytes{device="/dev/sda3", fstype="btrfs", instance="localhost:9100", job="node-exporter", mountpoint="/"}'
+        values: '100x40'
+      - series: 'node_filesystem_avail_bytes{device="/dev/sda3", fstype="btrfs", instance="localhost:9100", job="node-exporter", mountpoint="/"}'
+        values: '14x40'
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: RootDiskUsageHigh
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: RootDiskUsageHigh
+        exp_alerts:
+          - exp_labels:
+              device: /dev/sda3
+              fstype: btrfs
+              instance: localhost:9100
+              job: node-exporter
+              mountpoint: /
+              severity: critical
+            exp_annotations:
+              summary: "Root filesystem almost full on localhost:9100"
+              description: "Disk usage of / has been above 85% for more than 5 minutes (current value: 86.0%)."
+    promql_expr_test:
+      - expr: ALERTS{alertname="RootDiskUsageHigh"}
+        eval_time: 0m
+        exp_samples:
+          - labels: 'ALERTS{alertname="RootDiskUsageHigh", alertstate="pending", device="/dev/sda3", fstype="btrfs", instance="localhost:9100", job="node-exporter", mountpoint="/", severity="critical"}'
+            value: 1
+      - expr: ALERTS{alertname="RootDiskUsageHigh"}
+        eval_time: 5m
+        exp_samples:
+          - labels: 'ALERTS{alertname="RootDiskUsageHigh", alertstate="firing", device="/dev/sda3", fstype="btrfs", instance="localhost:9100", job="node-exporter", mountpoint="/", severity="critical"}'
+            value: 1
+
+  # RootDiskUsageHigh: only the root mountpoint counts - a full /home or a tmpfs on / is ignored
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_size_bytes{device="/dev/sda3", fstype="btrfs", instance="localhost:9100", job="node-exporter", mountpoint="/"}'
+        values: '100x40'
+      - series: 'node_filesystem_avail_bytes{device="/dev/sda3", fstype="btrfs", instance="localhost:9100", job="node-exporter", mountpoint="/"}'
+        values: '80x40'
+      - series: 'node_filesystem_size_bytes{device="/dev/sda3", fstype="btrfs", instance="localhost:9100", job="node-exporter", mountpoint="/home"}'
+        values: '100x40'
+      - series: 'node_filesystem_avail_bytes{device="/dev/sda3", fstype="btrfs", instance="localhost:9100", job="node-exporter", mountpoint="/home"}'
+        values: '5x40'
+      - series: 'node_filesystem_size_bytes{device="tmpfs", fstype="tmpfs", instance="localhost:9100", job="node-exporter", mountpoint="/"}'
+        values: '100x40'
+      - series: 'node_filesystem_avail_bytes{device="tmpfs", fstype="tmpfs", instance="localhost:9100", job="node-exporter", mountpoint="/"}'
+        values: '1x40'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: RootDiskUsageHigh
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: RootDiskUsageHigh
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="RootDiskUsageHigh"}
+        eval_time: 10m
+        exp_samples: []
+      - expr: ALERTS{alertname="RootDiskUsageHigh"}
+        eval_time: 30m
+        exp_samples: []
+
+  # TargetDown: healthy target never alerts
+  - interval: 1m
+    input_series:
+      - series: 'up{instance="localhost:9101", job="demo-service"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: TargetDown
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: TargetDown
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="TargetDown"}
+        eval_time: 5m
+        exp_samples: []
+      - expr: ALERTS{alertname="TargetDown"}
+        eval_time: 20m
+        exp_samples: []
+
+  # TargetDown: outage -> pending on first failed evaluation, firing after 1m, cleared after recovery
+  - interval: 1m
+    input_series:
+      - series: 'up{instance="localhost:9101", job="demo-service"}'
+        values: '1x1 0x10 1x15'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: TargetDown
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: TargetDown
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: TargetDown
+        exp_alerts:
+          - exp_labels:
+              instance: localhost:9101
+              job: demo-service
+              severity: critical
+            exp_annotations:
+              summary: "Target demo-service is down"
+              description: "Prometheus could not scrape localhost:9101 (job demo-service) for more than 1 minute."
+      - eval_time: 12m
+        alertname: TargetDown
+        exp_alerts:
+          - exp_labels:
+              instance: localhost:9101
+              job: demo-service
+              severity: critical
+            exp_annotations:
+              summary: "Target demo-service is down"
+              description: "Prometheus could not scrape localhost:9101 (job demo-service) for more than 1 minute."
+      - eval_time: 13m
+        alertname: TargetDown
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: TargetDown
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="TargetDown"}
+        eval_time: 1m
+        exp_samples: []
+      - expr: ALERTS{alertname="TargetDown"}
+        eval_time: 2m
+        exp_samples:
+          - labels: 'ALERTS{alertname="TargetDown", alertstate="pending", instance="localhost:9101", job="demo-service", severity="critical"}'
+            value: 1
+      - expr: ALERTS{alertname="TargetDown"}
+        eval_time: 3m
+        exp_samples:
+          - labels: 'ALERTS{alertname="TargetDown", alertstate="firing", instance="localhost:9101", job="demo-service", severity="critical"}'
+            value: 1
+      - expr: ALERTS{alertname="TargetDown"}
+        eval_time: 12m
+        exp_samples:
+          - labels: 'ALERTS{alertname="TargetDown", alertstate="firing", instance="localhost:9101", job="demo-service", severity="critical"}'
+            value: 1
+      - expr: ALERTS{alertname="TargetDown"}
+        eval_time: 13m
+        exp_samples: []
+      - expr: ALERTS{alertname="TargetDown"}
+        eval_time: 20m
+        exp_samples: []
+
+  # TargetDown: a single failed scrape shorter than `for` never fires
+  - interval: 1m
+    input_series:
+      - series: 'up{instance="localhost:9101", job="demo-service"}'
+        values: '1x1 0x0 1x20'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: TargetDown
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: TargetDown
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: TargetDown
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="TargetDown"}
+        eval_time: 2m
+        exp_samples:
+          - labels: 'ALERTS{alertname="TargetDown", alertstate="pending", instance="localhost:9101", job="demo-service", severity="critical"}'
+            value: 1
+      - expr: ALERTS{alertname="TargetDown"}
+        eval_time: 3m
+        exp_samples: []
+      - expr: ALERTS{alertname="TargetDown"}
+        eval_time: 10m
+        exp_samples: []
+
+  # TargetDown: only the failing job alerts when another job is healthy
+  - interval: 1m
+    input_series:
+      - series: 'up{instance="localhost:9101", job="demo-service"}'
+        values: '1x1 0x10 1x15'
+      - series: 'up{instance="localhost:9100", job="node-exporter"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: TargetDown
+        exp_alerts:
+          - exp_labels:
+              instance: localhost:9101
+              job: demo-service
+              severity: critical
+            exp_annotations:
+              summary: "Target demo-service is down"
+              description: "Prometheus could not scrape localhost:9101 (job demo-service) for more than 1 minute."
+    promql_expr_test:
+      - expr: ALERTS{alertname="TargetDown"}
+        eval_time: 3m
+        exp_samples:
+          - labels: 'ALERTS{alertname="TargetDown", alertstate="firing", instance="localhost:9101", job="demo-service", severity="critical"}'
+            value: 1
